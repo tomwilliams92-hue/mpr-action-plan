@@ -86,9 +86,11 @@
     pointer-events:none;
     mask-image: radial-gradient(ellipse at top left, black, transparent 70%);
   }
-  .hero-inner{position:relative; z-index:1; padding:56px 0 44px;}
-  .hero-top{display:flex; align-items:center; justify-content:space-between; gap:24px; margin-bottom:48px;}
-  .hero-top img{height:34px; width:auto; display:block; opacity:.96;}
+  /* padding-top/bottom only — the horizontal 28px gutter comes from .wrap
+     (must not use the `padding` shorthand here or it zeroes the side gutters) */
+  .hero-inner{position:relative; z-index:1; padding-top:52px; padding-bottom:44px;}
+  .hero-top{display:flex; align-items:center; justify-content:space-between; gap:24px; margin-bottom:44px;}
+  .hero-top img{height:42px; width:auto; display:block; opacity:.96;}
   .doc-meta{
     font-size:11.5px; letter-spacing:.12em; text-transform:uppercase;
     color:rgba(255,255,255,.66); font-weight:600; text-align:right; line-height:1.7;
@@ -218,18 +220,41 @@
   .meta-k{font-size:9.5px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:color-mix(in srgb, var(--ink) 60%, transparent); margin-bottom:4px;}
   .meta-v{font-size:13px; font-weight:600;}
 
-  /* ---------- TIMELINE ---------- */
-  .timeline{position:relative; padding:8px 0 4px; margin-top:8px;}
-  .timeline-track{position:relative; height:3px; background:var(--line-strong); border-radius:2px; margin:0 4px 30px;}
-  .timeline-fill{position:absolute; left:0; top:0; bottom:0; width:100%; background:linear-gradient(90deg, var(--accent), var(--ink)); border-radius:2px;}
-  .timeline-stops{display:grid; grid-template-columns:repeat(6,1fr); gap:10px;}
-  .tstop{position:relative; text-align:left;}
-  .tstop::before{
-    content:""; position:absolute; top:-38px; left:0; width:11px; height:11px; border-radius:50%;
-    background:var(--paper-2); border:3px solid var(--accent);
+  /* ---------- SEQUENCING (top-accent step cards) ---------- */
+  .timeline{margin-top:8px;}
+  .timeline-stops{display:grid; grid-template-columns:repeat(6,1fr); gap:12px;}
+  .tstop{
+    background:var(--paper-2); border:1px solid var(--line); border-top:3px solid var(--accent);
+    border-radius:6px; padding:16px 14px 18px; position:relative;
   }
-  .tstop-when{font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--accent); margin-bottom:4px;}
-  .tstop-what{font-size:12.5px; font-weight:600; line-height:1.4;}
+  .tstop-step{
+    font-size:11px; font-weight:800; color:var(--accent); margin-bottom:10px; letter-spacing:.02em;
+  }
+  .tstop-when{font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:color-mix(in srgb, var(--ink) 55%, transparent); margin-bottom:5px;}
+  .tstop-what{font-size:13px; font-weight:700; line-height:1.4; letter-spacing:-.005em;}
+
+  /* ---------- SUMMARY / RECOMMENDATION ---------- */
+  .rec-grid{display:grid; grid-template-columns:1.15fr .85fr; gap:30px; align-items:start;}
+  .rec-tier{border-left:3px solid var(--accent); padding-left:16px; margin-bottom:22px;}
+  .rec-tier:last-child{margin-bottom:0;}
+  .rec-tier-k{font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--accent); margin-bottom:10px;}
+  .rec-list{margin:0; padding:0; list-style:none; display:grid; gap:11px;}
+  .rec-list li{font-size:14px; line-height:1.6; color:color-mix(in srgb, var(--ink) 80%, transparent);}
+  .rec-list b{color:var(--ink); font-weight:700;}
+  .rec-bottomline{
+    background:var(--ink); color:#fff; border-radius:8px; padding:28px 26px;
+    position:relative; overflow:hidden;
+  }
+  .rec-bottomline::before{
+    content:""; position:absolute; top:0; right:0; width:90px; height:6px;
+    background-image:repeating-linear-gradient(-45deg, var(--accent) 0 8px, rgba(255,255,255,.08) 8px 16px);
+  }
+  .bl-k{font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--accent); font-weight:700;}
+  .bl-fig{font-size:clamp(32px,5vw,44px); font-weight:800; letter-spacing:-.02em; line-height:1; margin:12px 0 12px;}
+  .bl-fig span{font-size:17px; font-weight:600; color:rgba(255,255,255,.6); margin-left:3px;}
+  .bl-sub{font-size:13px; line-height:1.6; color:rgba(255,255,255,.72); margin:0 0 18px;}
+  .bl-next{font-size:13px; line-height:1.55; color:rgba(255,255,255,.9); border-top:1px solid rgba(255,255,255,.15); padding-top:16px;}
+  .bl-next span{display:block; font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent); font-weight:700; margin-bottom:5px;}
 
   /* ---------- FOOTER ---------- */
   footer{
@@ -299,6 +324,12 @@
     transition:filter .3s ease;
   }
   .hbar-fill:hover{filter:brightness(1.08);}
+  /* for short bars whose value would overflow the fill: label sits just
+     past the bar end in dark ink, so it stays legible on the light track */
+  .hbar-out{
+    position:absolute; top:0; height:100%; display:flex; align-items:center;
+    padding-left:9px; font-size:11.5px; font-weight:700; color:var(--ink); white-space:nowrap;
+  }
   .hbar-axis{display:grid; grid-template-columns:170px 1fr; gap:16px; margin-top:10px;}
   .hbar-axis-inner{display:flex; justify-content:space-between; font-size:10.5px; color:color-mix(in srgb, var(--ink) 60%, transparent); font-weight:500;}
 
@@ -336,18 +367,19 @@
     .context-grid{grid-template-columns:1fr;}
     .plan-cols{grid-template-columns:1fr;}
     .meta-row{grid-template-columns:repeat(2,1fr);}
-    .timeline-stops{grid-template-columns:repeat(2,1fr); row-gap:34px;}
-    .hero-top{flex-direction:column; align-items:flex-start; gap:14px;}
+    .timeline-stops{grid-template-columns:repeat(2,1fr); gap:10px;}
+    .hero-top{flex-direction:column; align-items:flex-start; gap:16px;}
     .doc-meta{text-align:left;}
     .roi-hero{grid-template-columns:1fr;}
-    .hbar-row{grid-template-columns:110px 1fr; gap:10px;}
+    .hbar-row{grid-template-columns:104px 1fr; gap:10px;}
     .hbar-label{font-size:11.5px;}
-    .hbar-axis{grid-template-columns:110px 1fr; gap:10px;}
+    .hbar-axis{grid-template-columns:104px 1fr; gap:10px;}
     .vchart{gap:4px; height:170px;}
     .vaxis{gap:4px;}
     .vaxis span{font-size:8px;}
     .vbar-val{font-size:8.5px;}
     .roi-callout{grid-template-columns:1fr;}
+    .rec-grid{grid-template-columns:1fr;}
   }
 
   @media print{
@@ -641,7 +673,7 @@
         </div>
         <div class="hbar-row">
           <div class="hbar-label">Bulk messaging</div>
-          <div class="hbar-track"><div class="hbar-fill" style="width:20.8%" title="Bulk messaging: 2&ndash;3 hrs/week (mid 2.5)">2.5 hrs</div></div>
+          <div class="hbar-track"><div class="hbar-fill" style="width:20.8%" title="Bulk messaging: 2&ndash;3 hrs/week (mid 2.5)"></div><div class="hbar-out" style="left:20.8%">2.5 hrs</div></div>
         </div>
       </div>
       <div class="hbar-axis"><div></div><div class="hbar-axis-inner"><span>0</span><span>3</span><span>6</span><span>9</span><span>12 hrs/wk</span></div></div>
@@ -687,15 +719,49 @@
     <div class="section-head"><span class="section-tag">04</span><h2 class="section-title">Suggested sequencing</h2></div>
     <div class="section-rule"></div>
     <div class="timeline">
-      <div class="timeline-track"><div class="timeline-fill"></div></div>
       <div class="timeline-stops">
-        <div class="tstop"><div class="tstop-when">Week 1</div><div class="tstop-what">Bulk messaging live</div></div>
-        <div class="tstop"><div class="tstop-when">Weeks 1&ndash;2</div><div class="tstop-what">Compliance intake built</div></div>
-        <div class="tstop"><div class="tstop-when">Weeks 2&ndash;4</div><div class="tstop-what">Timesheet automation built</div></div>
-        <div class="tstop"><div class="tstop-when">Weeks 3&ndash;5</div><div class="tstop-what">Talisman sync confirmed</div></div>
-        <div class="tstop"><div class="tstop-when">Month 2</div><div class="tstop-what">ATS evaluated &amp; rolled out</div></div>
-        <div class="tstop"><div class="tstop-when">Quarter 2+</div><div class="tstop-what">Platform consolidation review</div></div>
+        <div class="tstop"><div class="tstop-step">01</div><div class="tstop-when">Week 1</div><div class="tstop-what">Bulk messaging live</div></div>
+        <div class="tstop"><div class="tstop-step">02</div><div class="tstop-when">Weeks 1&ndash;2</div><div class="tstop-what">Compliance intake built</div></div>
+        <div class="tstop"><div class="tstop-step">03</div><div class="tstop-when">Weeks 2&ndash;4</div><div class="tstop-what">Timesheet automation built</div></div>
+        <div class="tstop"><div class="tstop-step">04</div><div class="tstop-when">Weeks 3&ndash;5</div><div class="tstop-what">Talisman sync confirmed</div></div>
+        <div class="tstop"><div class="tstop-step">05</div><div class="tstop-when">Month 2</div><div class="tstop-what">ATS evaluated &amp; rolled out</div></div>
+        <div class="tstop"><div class="tstop-step">06</div><div class="tstop-when">Quarter 2+</div><div class="tstop-what">Platform consolidation review</div></div>
       </div>
+    </div>
+  </section>
+
+  <section id="summary">
+    <div class="section-head"><span class="section-tag">05</span><h2 class="section-title">In summary &mdash; the recommendation</h2></div>
+    <div class="section-rule"></div>
+    <p class="lede" style="margin-bottom:26px;">If there are three things to take from this document, take these &mdash; ordered by what to do first.</p>
+    <div class="rec-grid">
+      <div class="rec-actions">
+        <div class="rec-tier">
+          <div class="rec-tier-k">Do first &mdash; this month</div>
+          <ul class="rec-list">
+            <li><b>Build the three core tools that need no subscription:</b> the compliance intake, the weekly-timesheet system (the single biggest time-saver), and the bulk-messaging dashboard. These are custom-built and owned outright &mdash; no recurring licence, just minimal hosting.</li>
+          </ul>
+        </div>
+        <div class="rec-tier">
+          <div class="rec-tier-k">In parallel</div>
+          <ul class="rec-list">
+            <li><b>Ask Talisman's vendor one question &mdash; is there an API?</b> If yes, push the intake straight into the CRM and drop the shared-drive double-handling.</li>
+            <li><b>Trial a light off-the-shelf ATS</b> for sourcing &mdash; the one area where paying a subscription is the honest, better-value call.</li>
+          </ul>
+        </div>
+        <div class="rec-tier">
+          <div class="rec-tier-k">Later &mdash; once proven</div>
+          <ul class="rec-list">
+            <li><b>Only then</b> weigh up a single consolidated workforce platform to replace the patchwork outright, rather than automating around it indefinitely.</li>
+          </ul>
+        </div>
+      </div>
+      <aside class="rec-bottomline">
+        <div class="bl-k">The bottom line</div>
+        <div class="bl-fig">~&pound;21,840<span>/year</span></div>
+        <p class="bl-sub">18&ndash;24 staff-hours a week returned at &pound;20/hr &mdash; over half a full-time role &mdash; plus &pound;1,200&ndash;&pound;3,000/year in software fees avoided by building rather than renting. A typical custom build pays for itself within about two months.</p>
+        <div class="bl-next"><span>Immediate next step</span> A short scoping call to size the three builds and confirm whether Talisman has an API.</div>
+      </aside>
     </div>
   </section>
 
