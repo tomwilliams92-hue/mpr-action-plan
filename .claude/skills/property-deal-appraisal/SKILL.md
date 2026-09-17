@@ -143,6 +143,14 @@ rent, not by what was paid. Include the inversion when it applies — a higher
 valuation borrows more and cashflows worse, so a strong survey is not
 automatically good news.
 
+**If the capital and income targets conflict, say so before anything else.**
+In a low-yielding area they routinely cannot both be met at any price or any
+loan-to-value, and the script says so explicitly when that is the case. This is
+the most important thing to surface, because the buyer is choosing between two
+outcomes rather than failing at one, and because the choice is made at the
+refinance — by the time they notice the cashflow is thin, the LTV is fixed.
+Present it as a decision with two defensible answers, not as a failure.
+
 **Then robustness.** The grid answers a question the base case cannot: is this a
 deal, or a bet? "Every cell makes money" and "only the optimistic corner works"
 deserve very different responses from the buyer.

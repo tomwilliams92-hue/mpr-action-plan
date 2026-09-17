@@ -564,6 +564,57 @@ def affordability_ceiling(deal):
     }
 
 
+def criteria_conflict(deal, ltvs=(55, 60, 65, 70, 75, 80)):
+    """Can the capital target and the income target both be met at once?
+
+    In a low-yielding area they usually cannot, and the reason is structural
+    rather than a matter of negotiating harder. Borrowing less at refinance buys
+    monthly headroom but strands capital; borrowing more recycles the capital but
+    the interest eats the rent. The buyer is choosing between two things, not
+    failing at one, and they deserve to be told that explicitly rather than left
+    to infer it from four red FAILs.
+
+    For each LTV this solves the price that fully recycles the capital and reports
+    the cashflow that comes with it, plus the capital that would have to stay in
+    to reach the income target instead.
+    """
+    rows = []
+    for ltv in ltvs:
+        d = deepcopy(deal)
+        d["refinance"]["ltv_pct"] = ltv
+        price = solve_max_offer(d, criteria_subset={"Money left in"}, strict=True)
+        if price is None:
+            rows.append((ltv, None, None, None))
+            continue
+        recycled = deepcopy(d)
+        recycled["purchase_price"] = price
+        r = appraise(recycled)
+        at_stated = deepcopy(d)
+        r2 = appraise(at_stated)
+        rows.append((ltv, price, r, r2))
+    return rows
+
+
+def conflict_summary(deal, rows):
+    """Whether both targets are reachable, and what has to give if not."""
+    crit = deal["criteria"]
+    target = crit["min_monthly_cashflow"]
+    reachable = [(ltv, price, r) for ltv, price, r, _ in rows
+                 if r is not None and r["monthly_cashflow"] >= target]
+    best = max((r["monthly_cashflow"] for _, _, r, _ in rows if r is not None),
+               default=0.0)
+    paying = [(ltv, r2) for ltv, _, _, r2 in rows
+              if r2 is not None and r2["monthly_cashflow"] >= target]
+    return {
+        "both_possible": bool(reachable),
+        "best_cashflow_while_recycling": best,
+        "cheapest_price_for_both": min((p for _, p, _ in reachable), default=None),
+        "capital_needed_for_income": min(
+            (r2["money_left_in"] for _, r2 in paying), default=None),
+        "target": target,
+    }
+
+
 def sensitivities(deal):
     """BRRR deals die at the valuation, not at the offer. Model the three ways."""
     out = {}
@@ -943,6 +994,39 @@ def report(deal, result, max_offer=None, show_sensitivity=True, show_solve=False
     add("")
 
     if show_sensitivity:
+        rows = criteria_conflict(deal)
+        summary = conflict_summary(deal, rows)
+        if not summary["both_possible"]:
+            add("## Can you have both?")
+            add("")
+            add("No. On this property your capital target and your income target "
+                "cannot both be met, at any price and at any loan-to-value. That is "
+                "not a negotiating problem — it is what the rent supports.")
+            add("")
+            add("| Refinance LTV | Price to fully recycle | Cashflow you get | "
+                "Or: capital left in at your price |")
+            add("| ---: | ---: | ---: | ---: |")
+            for ltv, price, r, r2 in rows:
+                if r is None:
+                    add(f"| {ltv}% | no price works | — | — |")
+                    continue
+                add(f"| {ltv}% | {money(price)} | {money(r['monthly_cashflow'])} | "
+                    f"{money(r2['money_left_in'])} |")
+            add("")
+            add(f"The most this can pay while still returning all your capital is "
+                f"{money(summary['best_cashflow_while_recycling'])} a month, against "
+                f"a target of {money(summary['target'])}.")
+            if summary["capital_needed_for_income"] is not None:
+                add(f" To reach {money(summary['target'])} instead, you would leave "
+                    f"about {money(summary['capital_needed_for_income'])} in at your "
+                    "stated price.")
+            add("")
+            add("Pick deliberately. Maximum leverage gives the best return on the "
+                "capital you leave behind and the worst monthly figure; minimum "
+                "leverage does the reverse. Neither is wrong, but buying at maximum "
+                "LTV and then being disappointed by the cashflow is a decision made "
+                "by accident.")
+            add("")
         add("## Is it robust, or is it a bet?")
         add("")
         add("Money left in, and on-paper margin, across the range you might be wrong "
