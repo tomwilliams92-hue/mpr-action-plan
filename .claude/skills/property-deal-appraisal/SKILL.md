@@ -31,6 +31,18 @@ lose money by negotiating hard on a property that was never going to cashflow.
 Make this explicit whenever it applies — it is usually the most useful thing you
 will tell them.
 
+The second thing worth getting straight, because buyers often ask about it in
+the wrong terms: **there is no deposit at refinance.** You are not asked for
+25% in cash. The lender advances 75% of the end value and the remaining 25%
+simply stays as your equity — money that is real, but that you cannot get back
+out and cannot put into the next purchase. If someone asks you to "factor in the
+remortgage deposit", that retained equity is what they mean, and it is already
+what the money-left-in test measures. Say so rather than adding a phantom cost.
+
+A deposit *does* exist where the property is bought on a BTL mortgage from the
+outset rather than bridged — that is a genuine cash outlay at completion, and
+the model handles it under `finance.method: "btl_mortgage"`.
+
 ## Workflow
 
 ### 1. Gather the deal
@@ -81,8 +93,15 @@ facility, two competing loan caps and a sensitivity grid, and small drifts chang
 the recommendation.
 
 ```bash
-python3 scripts/appraise.py deal.json --max-offer
+python3 scripts/appraise.py deal.json --max-offer          # appraise a known price
+python3 scripts/appraise.py deal.json --solve --max-offer  # work backwards to the price
 ```
+
+Use `--solve` whenever the question is "what should I pay" rather than "does
+this price work" — which is most of the time, and always when the user has only
+given you a listing. It works backwards from what the refinance will lend, and
+answers the price and the refurb budget together rather than assuming one to
+solve the other.
 
 `scripts/example-deal.json` is a complete, realistic input file — copy it and
 edit. Any field you leave out falls back to a documented default.
@@ -108,6 +127,14 @@ in, cashflow. Four or five rows. If you are revisiting a deal after the user
 changed an input, put the before and after side by side and say which change did
 the work — people learn far more from "dropping the refurb moved it more than
 the price did" than from a fresh set of numbers.
+
+**If they asked what to pay, lead with the frontier, not a single number.**
+Price and refurb are one decision — every pound of works is a pound off the
+offer, slightly more than pound for pound once contingency and tax are counted.
+Quoting one maximum price silently assumes a refurb figure the user has not
+confirmed, and it is the assumption most likely to be wrong. Give them the line
+and let them pick the row that matches their builder's number, then say what
+happens if that number moves.
 
 **Then the constraint, explained.** Which test binds and why. If income tests
 fail at any price, say plainly that negotiating harder will not fix the monthly

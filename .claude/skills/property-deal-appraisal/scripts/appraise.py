@@ -110,6 +110,9 @@ DEFAULTS = {
         "bridge_legal_and_valuation": 0.0,
         "broker_fee": 0.0,
         "roll_up_interest": True,
+        "purchase_deposit_pct": 25.0,
+        "purchase_product_fee_pct": 3.0,
+        "purchase_rate_pct": 5.4,
     },
     "refinance": {
         "ltv_pct": 75.0,
@@ -188,21 +191,36 @@ def appraise(deal, price=None):
     contingency = refurb_budget * rfb["contingency_pct"] / 100.0
     refurb_total = refurb_budget + contingency
 
-    # --- bridging ----------------------------------------------------------
+    # --- how the purchase is funded ----------------------------------------
+    # Three routes. Bridging is the auction default; a BTL mortgage from day one
+    # is cheaper but needs a lettable property and a timescale a lender can meet;
+    # cash needs no deposit because the whole price is the deposit.
     if fin["method"] == "bridging":
-        bridge_loan = price * fin["bridge_ltv_pct"] / 100.0
-        arrangement_fee = bridge_loan * fin["bridge_arrangement_fee_pct"] / 100.0
-        bridge_interest = bridge_loan * fin["bridge_monthly_rate_pct"] / 100.0 * months
-        exit_fee = bridge_loan * fin["bridge_exit_fee_pct"] / 100.0
+        purchase_loan = price * fin["bridge_ltv_pct"] / 100.0
+        arrangement_fee = purchase_loan * fin["bridge_arrangement_fee_pct"] / 100.0
+        bridge_interest = purchase_loan * fin["bridge_monthly_rate_pct"] / 100.0 * months
+        exit_fee = purchase_loan * fin["bridge_exit_fee_pct"] / 100.0
         if fin["roll_up_interest"]:
             interest_paid_in_cash = 0.0
-            redemption = bridge_loan + bridge_interest + exit_fee
+            redemption = purchase_loan + bridge_interest + exit_fee
         else:
             interest_paid_in_cash = bridge_interest
-            redemption = bridge_loan + exit_fee
+            redemption = purchase_loan + exit_fee
+    elif fin["method"] == "btl_mortgage":
+        # A deposit is a real cash outlay at completion, unlike the equity you
+        # retain at refinance — which is why it belongs here and not there.
+        purchase_loan = price * (100.0 - fin["purchase_deposit_pct"]) / 100.0
+        arrangement_fee = purchase_loan * fin["purchase_product_fee_pct"] / 100.0
+        bridge_interest = (purchase_loan * fin["purchase_rate_pct"] / 100.0 / 12.0) * months
+        exit_fee = 0.0
+        interest_paid_in_cash = bridge_interest
+        redemption = purchase_loan
     else:
-        bridge_loan = arrangement_fee = bridge_interest = exit_fee = 0.0
+        purchase_loan = arrangement_fee = bridge_interest = exit_fee = 0.0
         interest_paid_in_cash = redemption = 0.0
+
+    bridge_loan = purchase_loan  # kept under the old name for the report
+    deposit = price - purchase_loan
 
     finance_fees = arrangement_fee + fin["bridge_legal_and_valuation"] + fin["broker_fee"]
 
@@ -274,6 +292,8 @@ def appraise(deal, price=None):
         "refurb_contingency": contingency,
         "refurb_total": refurb_total,
         "bridge_loan": bridge_loan,
+        "deposit": deposit,
+        "retained_equity": value - refi_loan,
         "bridge_arrangement_fee": arrangement_fee,
         "bridge_interest": bridge_interest,
         "bridge_exit_fee": exit_fee,
@@ -433,7 +453,7 @@ def classify(result, criteria):
         "much you trust the end value and the rent, not on the near misses.")
 
 
-def solve_max_offer(deal, criteria_subset=None):
+def solve_max_offer(deal, criteria_subset=None, strict=False):
     """Highest purchase price at which the deal still passes.
 
     Everything that matters gets worse as the price rises and nothing gets
@@ -448,7 +468,8 @@ def solve_max_offer(deal, criteria_subset=None):
         if criteria_subset:
             tests = [t for t in tests
                      if t[0] in criteria_subset or t[1] in criteria_subset]
-        return all(st != "FAIL" for _, _, st, _ in tests)
+        allowed = ("PASS",) if strict else ("PASS", "NEARLY")
+        return all(st in allowed for _, _, st, _ in tests)
 
     lo, hi = 0.0, max(deal["post_refurb_value"], deal["purchase_price"]) * 1.5
     if not passes(lo):
@@ -462,6 +483,85 @@ def solve_max_offer(deal, criteria_subset=None):
         else:
             hi = mid
     return math.floor(lo / 100.0) * 100.0
+
+
+def solve_max_refurb(deal, price, criteria_subset=None):
+    """Biggest refurb budget that still works, holding the price still."""
+    crit = deal["criteria"]
+
+    def passes(budget):
+        d = deepcopy(deal)
+        d["purchase_price"] = price
+        d["refurb"]["budget"] = budget
+        tests = test_criteria(appraise(d), crit)
+        if criteria_subset:
+            tests = [t for t in tests
+                     if t[0] in criteria_subset or t[1] in criteria_subset]
+        return all(st != "FAIL" for _, _, st, _ in tests)
+
+    if not passes(0):
+        return None
+    lo, hi = 0.0, max(deal["post_refurb_value"], 1.0)
+    if passes(hi):
+        return hi
+    for _ in range(50):
+        mid = (lo + hi) / 2
+        if passes(mid):
+            lo = mid
+        else:
+            hi = mid
+    return math.floor(lo / 500.0) * 500.0
+
+
+def solve_frontier(deal, refurbs=None, criteria_subset=("capital",), strict=True):
+    """The pairs of (refurb budget, purchase price) that make the deal work.
+
+    "What should I pay" has no single answer, because what you can pay depends
+    entirely on what the works cost — every pound of refurb is a pound you
+    cannot put in the offer. Solving the two together gives the buyer a line
+    they can negotiate along instead of a number that silently assumes a refurb
+    figure they have not confirmed.
+    """
+    base = deal["refurb"]["budget"]
+    if refurbs is None:
+        if base <= 0:
+            base = deal["post_refurb_value"] * 0.15
+        refurbs = [round(base * m / 1000) * 1000
+                   for m in (0.5, 0.75, 1.0, 1.25, 1.5, 2.0)]
+    rows = []
+    for budget in sorted(set(refurbs)):
+        d = deepcopy(deal)
+        d["refurb"]["budget"] = budget
+        price = solve_max_offer(d, criteria_subset=set(criteria_subset), strict=strict)
+        if price is None:
+            rows.append((budget, None, None))
+            continue
+        d["purchase_price"] = price
+        rows.append((budget, price, appraise(d)))
+    return rows
+
+
+def affordability_ceiling(deal):
+    """The all-in number every other figure has to fit inside.
+
+    At refinance you can borrow a fixed amount — whichever of the LTV cap and
+    the rental stress cap is lower. Add whatever capital you are willing to
+    leave behind and you have the total the whole project may cost: purchase,
+    tax, fees, works, finance, the lot. It is the cleanest way to see why a
+    refurb overrun has to come straight out of the offer.
+    """
+    result = appraise(deal)
+    budget = result["refi_loan"] + deal["criteria"]["max_money_left_in"]
+    non_purchase = result["total_project_cost"] - result["purchase_price"]
+    return {
+        "refi_loan": result["refi_loan"],
+        "acceptable_left_in": deal["criteria"]["max_money_left_in"],
+        "total_project_budget": budget,
+        "non_purchase_costs": non_purchase,
+        "implied_price": budget - non_purchase,
+        "binding_cap": result["binding_cap"],
+        "retained_equity": result["retained_equity"],
+    }
 
 
 def sensitivities(deal):
@@ -612,7 +712,7 @@ def money(x):
     return f"£{x:,.0f}"
 
 
-def report(deal, result, max_offer=None, show_sensitivity=True):
+def report(deal, result, max_offer=None, show_sensitivity=True, show_solve=False):
     lines = []
     add = lines.append
     crit = deal["criteria"]
@@ -683,6 +783,69 @@ def report(deal, result, max_offer=None, show_sensitivity=True):
     add(f"Total project cost {money(result['total_project_cost'])} against an end value of "
         f"{money(deal['post_refurb_value'])} — {money(result['profit_on_paper'])} of margin.")
     add("")
+
+    if show_solve:
+        ceiling = affordability_ceiling(deal)
+        add("## What you need to buy it for")
+        add("")
+        add("Everything has to fit inside one number: what you can borrow when you "
+            "refinance, plus whatever capital you are willing to leave behind.")
+        add("")
+        add("| | |")
+        add("| --- | ---: |")
+        add(f"| Loan available at refinance (limited by the {ceiling['binding_cap']}) "
+            f"| {money(ceiling['refi_loan'])} |")
+        add(f"| Capital you have said you will leave in "
+            f"| {money(ceiling['acceptable_left_in'])} |")
+        add(f"| **Total the whole project may cost** "
+            f"| **{money(ceiling['total_project_budget'])}** |")
+        add(f"| Less everything that is not the purchase price "
+            f"| ({money(ceiling['non_purchase_costs'])}) |")
+        add(f"| **Leaves for the purchase** | **{money(ceiling['implied_price'])}** |")
+        add("")
+        add(f"The {money(ceiling['retained_equity'])} of equity left in the property "
+            "after refinancing is not a deposit you hand over — it is the part of the "
+            "value the lender will not lend against, so it is money you cannot get "
+            "back out. That is precisely what the money-left-in test measures, and it "
+            "is why it usually decides the maximum price.")
+        add("")
+
+        add("## Price and refurb are the same decision")
+        add("")
+        add("Every pound the works cost is a pound you cannot put in the offer, so "
+            "there is no single maximum price — there is a line you can negotiate "
+            "along. Find your honest refurb figure in the left column and read across.")
+        add("")
+        add("| If the refurb costs | Pay no more than | Total project cost |")
+        add("| ---: | ---: | ---: |")
+        rows = solve_frontier(deal)
+        for budget, price, row in rows:
+            if price is None:
+                add(f"| {money(budget)} | no price works | — |")
+            else:
+                add(f"| {money(budget)} | **{money(price)}** | "
+                    f"{money(row['total_project_cost'])} |")
+        add("")
+        priced = [(b, p) for b, p, _ in rows if p is not None]
+        if len(priced) >= 2:
+            (b0, p0), (b1, p1) = priced[0], priced[-1]
+            rate = (p0 - p1) / (b1 - b0) if b1 != b0 else 0
+            add(f"Every extra £1,000 of works costs you about £{rate * 1000:,.0f} of "
+                "purchase price — more than pound for pound, because the works carry "
+                "contingency while the price carries tax and finance. A refurb "
+                "estimate that turns out optimistic does not just cost you the "
+                "overrun; it means you overpaid by more than the overrun.")
+        add("")
+        at_price = solve_max_refurb(deal, deal["purchase_price"],
+                                    criteria_subset={"capital"})
+        if at_price is None:
+            add(f"At your stated price of {money(deal['purchase_price'])} the deal "
+                "fails on capital even with no works at all.")
+        else:
+            add(f"Put the other way round: at {money(deal['purchase_price'])} the "
+                f"works must come in **under {money(at_price)}** "
+                f"(you have budgeted {money(deal['refurb']['budget'])}).")
+        add("")
 
     add("## Verdict")
     add("")
@@ -846,6 +1009,8 @@ def main():
     parser.add_argument("--max-offer", action="store_true",
                         help="also solve for the highest price that meets every criterion")
     parser.add_argument("--no-sensitivity", action="store_true")
+    parser.add_argument("--solve", action="store_true",
+                        help="solve the purchase price and refurb budget together")
     parser.add_argument("--json", action="store_true", help="emit raw numbers instead of a report")
     args = parser.parse_args()
 
@@ -865,7 +1030,8 @@ def main():
         solved = solve_max_offer(deal)
         max_offer = False if solved is None else solved
 
-    print(report(deal, result, max_offer=max_offer, show_sensitivity=not args.no_sensitivity))
+    print(report(deal, result, max_offer=max_offer,
+                 show_sensitivity=not args.no_sensitivity, show_solve=args.solve))
 
 
 if __name__ == "__main__":
