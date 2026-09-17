@@ -218,10 +218,20 @@ If the user has not told you their thresholds, use these and state that you have
 
 | Test | Category | Default |
 | --- | --- | --- |
-| Money left in after refinance | capital | £0 — full recycle |
+| Money left in after refinance | capital | £10,000 |
 | Return on capital left in | capital | 15% |
-| Monthly cashflow | income | £200 per property |
+| Monthly cashflow | income | £150 per property |
 | Yield on end value | income | 7% |
+
+**Cashflow means after the reserves.** Rent, less mortgage interest, less
+letting management and insurance, less provisions for maintenance and voids.
+This is worth stating explicitly every time, because investors quote cashflow
+three different ways and the gap between them is enormous — on a typical North
+Wales terrace the same deal reads £244 after the mortgage alone, £141 after real
+cash costs, and £71 after reserves. The report shows all three as a ladder so
+the user can see which they are being judged on. Maintenance and voids do not
+leave the account monthly, but they leave it; judging on the figure above the
+reserves is how people end up subsidising a property they were told made money.
 
 The capital/income split is deliberate and worth explaining to the user at least
 once. Capital tests ask whether you get your money back to buy the next one;
@@ -234,10 +244,11 @@ margin, because these thresholds are round numbers rather than cliffs. Leaving
 £6,000 in against a £0 target is a good result described badly, and reporting it
 as a failure would mislead. Treat a near miss as a pass with a note.
 
-£0 left in is the textbook BRRR target and demanding in the current rate
-environment; many workable deals leave £10,000–£25,000 in. If the user's
-criteria make every deal in their area impossible, say so — that usually means
-the criteria need revisiting, not that the market has none.
+The £10,000 capital default is deliberately not the textbook £0. Full recycling
+is the aspiration, but in the current rate environment demanding it rejects most
+workable deals, and a £6,000 near-miss is a good outcome rather than a failure.
+If the user's criteria make every deal in their area impossible, say so — that
+usually means the criteria need revisiting, not that the market has none.
 
 ## Scope and limits
 

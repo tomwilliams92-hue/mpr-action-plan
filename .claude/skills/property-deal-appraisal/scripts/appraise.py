@@ -143,8 +143,8 @@ DEFAULTS = {
         "other_annual": 0.0,
     },
     "criteria": {
-        "max_money_left_in": 0.0,
-        "min_monthly_cashflow": 200.0,
+        "max_money_left_in": 10_000.0,
+        "min_monthly_cashflow": 150.0,
         "min_roi_pct": 15.0,
         "min_yield_on_value_pct": 7.0,
     },
@@ -337,6 +337,8 @@ def appraise(deal, price=None):
         "maintenance": maintenance,
         "voids": voids,
         "fixed_monthly": fixed_monthly,
+        "after_mortgage": rent - mortgage_monthly,
+        "after_cash_costs": rent - mortgage_monthly - management - fixed_monthly,
         "monthly_cashflow": monthly_cashflow,
         "annual_cashflow": annual_cashflow,
         "roi": roi,
@@ -978,12 +980,20 @@ def report(deal, result, provided=frozenset(), max_offer=None,
     add("| Item | Monthly |")
     add("| --- | ---: |")
     add(f"| Rent | {money(deal['monthly_rent'])} |")
-    add(f"| Mortgage interest | ({money(result['mortgage_monthly'])}) |")
-    add(f"| Letting management | ({money(result['management'])}) |")
-    add(f"| Maintenance reserve | ({money(result['maintenance'])}) |")
-    add(f"| Voids reserve | ({money(result['voids'])}) |")
-    add(f"| Insurance and fixed charges | ({money(result['fixed_monthly'])}) |")
+    add(f"| less mortgage interest | ({money(result['mortgage_monthly'])}) |")
+    add(f"| *After the mortgage* | *{money(result['after_mortgage'])}* |")
+    add(f"| less letting management | ({money(result['management'])}) |")
+    add(f"| less insurance and fixed charges | ({money(result['fixed_monthly'])}) |")
+    add(f"| *After real cash costs* | *{money(result['after_cash_costs'])}* |")
+    add(f"| less maintenance reserve | ({money(result['maintenance'])}) |")
+    add(f"| less voids reserve | ({money(result['voids'])}) |")
     add(f"| **Net cashflow** | **{money(result['monthly_cashflow'])}** |")
+    add("")
+    add("The cashflow test is applied to the bottom line, after the reserves. "
+        "Maintenance and voids do not leave your account every month, but they do "
+        "leave it — a boiler and six weeks empty in the same year is an ordinary "
+        "year, not a disaster. Judging a deal on the figure above the reserves is "
+        "how people end up subsidising a property they were told was profitable.")
     add("")
     roi_text = ("infinite — no capital left in" if math.isinf(result["roi"])
                 else f"{result['roi']:.1f}%")
