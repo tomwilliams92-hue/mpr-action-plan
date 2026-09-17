@@ -1,0 +1,60 @@
+{
+  "address": "3-bed mid terrace, Colwyn Bay LL29 — auction lot, guide £95,000",
+  "purchase_price": 95000,
+  "post_refurb_value": 155000,
+  "monthly_rent": 850,
+  "ltt_basis": "higher_residential",
+
+  "refurb": { "budget": 30000, "contingency_pct": 15, "months": 5 },
+
+  "purchase_costs": {
+    "auction_buyer_premium": 1800,
+    "auction_admin_fee": 400,
+    "seller_costs_payable_by_buyer": 1200,
+    "solicitor_purchase": 1800,
+    "searches": 420,
+    "survey": 650,
+    "ltt_filing": 150,
+    "other": 0
+  },
+
+  "finance": {
+    "method": "bridging",
+    "bridge_ltv_pct": 70,
+    "bridge_monthly_rate_pct": 0.95,
+    "bridge_arrangement_fee_pct": 2,
+    "bridge_exit_fee_pct": 0,
+    "bridge_legal_and_valuation": 1900,
+    "broker_fee": 1500,
+    "roll_up_interest": true
+  },
+
+  "refinance": {
+    "ltv_pct": 75,
+    "rate_pct": 5.4,
+    "product_fee_pct": 3,
+    "product_fee_added_to_loan": true,
+    "icr_pct": 125,
+    "stress_rate_pct": 5.5,
+    "legal_and_valuation": 900,
+    "broker_fee": 995
+  },
+
+  "holding_costs_monthly": { "council_tax": 0, "insurance": 45, "utilities": 60, "other": 0 },
+
+  "operating_costs": {
+    "management_pct": 10,
+    "maintenance_pct": 5,
+    "voids_pct": 5,
+    "insurance_annual": 380,
+    "ground_rent_and_service_charge_annual": 0,
+    "other_annual": 0
+  },
+
+  "criteria": {
+    "max_money_left_in": 0,
+    "min_monthly_cashflow": 200,
+    "min_roi_pct": 15,
+    "min_yield_on_value_pct": 6.5
+  }
+}
