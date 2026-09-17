@@ -88,27 +88,35 @@ def ltt(price, basis="higher_residential"):
 # Input handling
 # --------------------------------------------------------------------------
 
+# Defaults are the mid-points of the ranges in references/cost-benchmarks.md,
+# not zero. A cost left out of the input file should make the appraisal
+# realistic, not optimistic — an omitted solicitor fee silently costing nothing
+# flatters every deal that passes through.
+#
+# The two exceptions are the auction fees, which stay at zero because they
+# depend entirely on which kind of auction it is, and guessing wrong in either
+# direction is worse than a visible zero the buyer has to fill in.
 DEFAULTS = {
     "ltt_basis": "higher_residential",
-    "refurb": {"budget": 0.0, "contingency_pct": 15.0, "months": 4},
+    "refurb": {"budget": 0.0, "contingency_pct": 15.0, "months": 5},
     "purchase_costs": {
         "auction_buyer_premium": 0.0,
         "auction_admin_fee": 0.0,
         "seller_costs_payable_by_buyer": 0.0,
-        "solicitor_purchase": 0.0,
-        "searches": 0.0,
-        "survey": 0.0,
-        "ltt_filing": 0.0,
-        "other": 0.0,
+        "solicitor_purchase": 1_900.0,
+        "searches": 420.0,
+        "survey": 900.0,
+        "ltt_filing": 150.0,
+        "other": 95.0,
     },
     "finance": {
-        "method": "cash",
+        "method": "bridging",
         "bridge_ltv_pct": 70.0,
         "bridge_monthly_rate_pct": 0.95,
         "bridge_arrangement_fee_pct": 2.0,
         "bridge_exit_fee_pct": 0.0,
-        "bridge_legal_and_valuation": 0.0,
-        "broker_fee": 0.0,
+        "bridge_legal_and_valuation": 1_900.0,
+        "broker_fee": 1_500.0,
         "roll_up_interest": True,
         "purchase_deposit_pct": 25.0,
         "purchase_product_fee_pct": 3.0,
@@ -121,15 +129,16 @@ DEFAULTS = {
         "product_fee_added_to_loan": True,
         "icr_pct": 125.0,
         "stress_rate_pct": 5.5,
-        "legal_and_valuation": 0.0,
-        "broker_fee": 0.0,
+        "legal_and_valuation": 900.0,
+        "broker_fee": 995.0,
     },
-    "holding_costs_monthly": {"council_tax": 0.0, "insurance": 0.0, "utilities": 0.0, "other": 0.0},
+    "holding_costs_monthly": {"council_tax": 120.0, "insurance": 50.0,
+                              "utilities": 40.0, "other": 0.0},
     "operating_costs": {
         "management_pct": 10.0,
         "maintenance_pct": 5.0,
         "voids_pct": 5.0,
-        "insurance_annual": 0.0,
+        "insurance_annual": 380.0,
         "ground_rent_and_service_charge_annual": 0.0,
         "other_annual": 0.0,
     },
@@ -152,6 +161,19 @@ def merge(base, override):
     return out
 
 
+def flat_paths(obj, prefix=""):
+    """Dotted paths actually present in the user's file, so the report can say
+    which figures came from them and which the script filled in. Nobody should
+    have to guess which numbers in an appraisal were invented."""
+    found = set()
+    for key, value in obj.items():
+        path = f"{prefix}{key}"
+        found.add(path)
+        if isinstance(value, dict):
+            found |= flat_paths(value, path + ".")
+    return found
+
+
 def load_deal(path):
     with open(path) as handle:
         raw = json.load(handle)
@@ -163,7 +185,7 @@ def load_deal(path):
                 "post_refurb_value and monthly_rent must be evidenced before the "
                 "numbers mean anything — see references/valuation-evidence.md."
             )
-    return deal
+    return deal, flat_paths(raw)
 
 
 # --------------------------------------------------------------------------
@@ -754,6 +776,128 @@ def rent_sensitivity(deal, steps=(-0.1, -0.05, 0.0, 0.05, 0.1, 0.15)):
     return rows
 
 
+# The full input register. Everything the model reads appears here, so the
+# report can show the buyer every figure their answer rests on and mark which
+# ones they supplied. A number nobody can see is a number nobody can challenge.
+ASSUMPTION_SPEC = [
+    ("The three that decide everything", [
+        ("Post-refurb value", "post_refurb_value", "money"),
+        ("Achievable monthly rent", "monthly_rent", "money"),
+        ("Refurb budget", "refurb.budget", "money"),
+    ]),
+    ("Purchase", [
+        ("Purchase price modelled", "purchase_price", "money"),
+        ("Tax basis", "ltt_basis", "text"),
+        ("Auction buyer premium or reservation fee", "purchase_costs.auction_buyer_premium", "money"),
+        ("Auction admin fee", "purchase_costs.auction_admin_fee", "money"),
+        ("Seller costs passed to buyer", "purchase_costs.seller_costs_payable_by_buyer", "money"),
+        ("Solicitor", "purchase_costs.solicitor_purchase", "money"),
+        ("Searches", "purchase_costs.searches", "money"),
+        ("Survey", "purchase_costs.survey", "money"),
+        ("LTT return filing", "purchase_costs.ltt_filing", "money"),
+        ("Other purchase costs", "purchase_costs.other", "money"),
+    ]),
+    ("Works", [
+        ("Contingency on the works", "refurb.contingency_pct", "pct"),
+        ("Months from purchase to refinance", "refurb.months", "months"),
+    ]),
+    ("Funding the purchase", [
+        ("Method", "finance.method", "text"),
+        ("Bridge loan to value", "finance.bridge_ltv_pct", "pct"),
+        ("Bridge interest", "finance.bridge_monthly_rate_pct", "pct_month"),
+        ("Bridge arrangement fee", "finance.bridge_arrangement_fee_pct", "pct"),
+        ("Bridge exit fee", "finance.bridge_exit_fee_pct", "pct"),
+        ("Bridge legal and valuation", "finance.bridge_legal_and_valuation", "money"),
+        ("Broker fee", "finance.broker_fee", "money"),
+        ("Interest rolled up rather than paid monthly", "finance.roll_up_interest", "bool"),
+        ("Deposit if bought on a BTL mortgage", "finance.purchase_deposit_pct", "pct"),
+    ]),
+    ("Refinance", [
+        ("Loan to value", "refinance.ltv_pct", "pct"),
+        ("Rate", "refinance.rate_pct", "pct"),
+        ("Product fee", "refinance.product_fee_pct", "pct"),
+        ("Product fee added to the loan", "refinance.product_fee_added_to_loan", "bool"),
+        ("Interest cover required", "refinance.icr_pct", "pct"),
+        ("Stress rate", "refinance.stress_rate_pct", "pct"),
+        ("Legal and valuation", "refinance.legal_and_valuation", "money"),
+        ("Broker fee", "refinance.broker_fee", "money"),
+    ]),
+    ("Holding costs while the works run, per month", [
+        ("Council tax", "holding_costs_monthly.council_tax", "money"),
+        ("Insurance", "holding_costs_monthly.insurance", "money"),
+        ("Utilities", "holding_costs_monthly.utilities", "money"),
+        ("Other", "holding_costs_monthly.other", "money"),
+    ]),
+    ("Operating costs once let", [
+        ("Letting management", "operating_costs.management_pct", "pct_rent"),
+        ("Maintenance reserve", "operating_costs.maintenance_pct", "pct_rent"),
+        ("Voids reserve", "operating_costs.voids_pct", "pct_rent"),
+        ("Landlord insurance", "operating_costs.insurance_annual", "money_year"),
+        ("Ground rent and service charge", "operating_costs.ground_rent_and_service_charge_annual", "money_year"),
+        ("Other annual costs", "operating_costs.other_annual", "money_year"),
+    ]),
+    ("Your criteria", [
+        ("Maximum money left in", "criteria.max_money_left_in", "money"),
+        ("Minimum monthly cashflow", "criteria.min_monthly_cashflow", "money"),
+        ("Minimum return on capital left in", "criteria.min_roi_pct", "pct"),
+        ("Minimum yield on end value", "criteria.min_yield_on_value_pct", "pct"),
+    ]),
+]
+
+
+def dig(deal, path):
+    node = deal
+    for part in path.split("."):
+        if not isinstance(node, dict) or part not in node:
+            return None
+        node = node[part]
+    return node
+
+
+def render_value(value, kind):
+    if value is None:
+        return "—"
+    if kind == "money":
+        return f"£{value:,.0f}"
+    if kind == "money_year":
+        return f"£{value:,.0f} a year"
+    if kind == "pct":
+        return f"{value:g}%"
+    if kind == "pct_month":
+        return f"{value:g}% a month"
+    if kind == "pct_rent":
+        return f"{value:g}% of rent"
+    if kind == "months":
+        return f"{value:g} months"
+    if kind == "bool":
+        return "yes" if value else "no"
+    return str(value).replace("_", " ")
+
+
+def assumption_rows(deal, provided):
+    """Every input, its value and whether the buyer supplied it."""
+    sections = []
+    method = deal["finance"]["method"]
+    for title, entries in ASSUMPTION_SPEC:
+        rows = []
+        for label, path, kind in entries:
+            # Do not clutter the register with terms that this deal never uses.
+            if path.startswith("finance.bridge") and method != "bridging":
+                continue
+            if path == "finance.roll_up_interest" and method != "bridging":
+                continue
+            if path == "finance.purchase_deposit_pct" and method != "btl_mortgage":
+                continue
+            value = dig(deal, path)
+            if value is None:
+                continue
+            rows.append((label, render_value(value, kind),
+                         "yours" if path in provided else "assumed"))
+        if rows:
+            sections.append((title, rows))
+    return sections
+
+
 # --------------------------------------------------------------------------
 # Reporting
 # --------------------------------------------------------------------------
@@ -763,7 +907,8 @@ def money(x):
     return f"£{x:,.0f}"
 
 
-def report(deal, result, max_offer=None, show_sensitivity=True, show_solve=False):
+def report(deal, result, provided=frozenset(), max_offer=None,
+           show_sensitivity=True, show_solve=False):
     lines = []
     add = lines.append
     crit = deal["criteria"]
@@ -780,13 +925,27 @@ def report(deal, result, max_offer=None, show_sensitivity=True, show_solve=False
     add("| --- | ---: |")
     add(f"| Purchase price | {money(result['purchase_price'])} |")
     add(f"| Land Transaction Tax | {money(result['ltt'])} |")
-    add(f"| Legal, survey, auction and transaction fees | {money(result['transaction_fees'])} |")
+    for label, path, _ in ASSUMPTION_SPEC[1][1]:
+        if not path.startswith("purchase_costs."):
+            continue
+        amount = dig(deal, path)
+        if amount:
+            add(f"| {label} | {money(amount)} |")
     add(f"| Refurb budget | {money(result['refurb_budget'])} |")
     add(f"| Refurb contingency | {money(result['refurb_contingency'])} |")
-    add(f"| Finance arrangement, valuation and broker fees | {money(result['finance_fees'])} |")
+    if result["bridge_arrangement_fee"]:
+        add(f"| Lender arrangement fee | {money(result['bridge_arrangement_fee'])} |")
+    if deal["finance"]["bridge_legal_and_valuation"]:
+        add(f"| Lender legal and valuation | "
+            f"{money(deal['finance']['bridge_legal_and_valuation'])} |")
+    if deal["finance"]["broker_fee"]:
+        add(f"| Broker fee | {money(deal['finance']['broker_fee'])} |")
     if result["interest_paid_in_cash"]:
         add(f"| Bridge interest paid monthly | {money(result['interest_paid_in_cash'])} |")
-    add(f"| Holding costs during works | {money(result['holding_costs'])} |")
+    months_held = deal["refurb"]["months"]
+    monthly_hold = sum(deal["holding_costs_monthly"].values())
+    add(f"| Holding costs, {monthly_hold:,.0f}/month over {months_held:g} months "
+        f"| {money(result['holding_costs'])} |")
     if result["bridge_loan"]:
         add(f"| Less bridging advance | ({money(result['bridge_loan'])}) |")
     add(f"| **Cash required** | **{money(result['cash_in'])}** |")
@@ -1084,7 +1243,28 @@ def report(deal, result, max_offer=None, show_sensitivity=True, show_solve=False
             "If the 10% row leaves more capital stranded than you can afford, the deal has no "
             "margin for error regardless of what the base case says.")
 
+
+    add("")
+    add("## Every figure this rests on")
+    add("")
+    assumed = sum(1 for _, rows in assumption_rows(deal, provided)
+                  for _, _, src in rows if src == "assumed")
+    add(f"Marked *yours* where you gave me the number and *assumed* where I filled "
+        f"it in from market typicals. {assumed} figures here are mine, not yours — "
+        "they are reasonable starting points, not quotes, and any of them can move "
+        "the answer. Correct the ones you know and I will re-run.")
+    add("")
+    for title, rows in assumption_rows(deal, provided):
+        add(f"**{title}**")
+        add("")
+        add("| Figure | Value | Source |")
+        add("| --- | ---: | --- |")
+        for label, value, source in rows:
+            add(f"| {label} | {value} | {source} |")
+        add("")
+
     return "\n".join(lines)
+
 
 
 def main():
@@ -1098,7 +1278,7 @@ def main():
     parser.add_argument("--json", action="store_true", help="emit raw numbers instead of a report")
     args = parser.parse_args()
 
-    deal = load_deal(args.deal)
+    deal, provided = load_deal(args.deal)
     result = appraise(deal)
 
     if args.json:
@@ -1114,7 +1294,7 @@ def main():
         solved = solve_max_offer(deal)
         max_offer = False if solved is None else solved
 
-    print(report(deal, result, max_offer=max_offer,
+    print(report(deal, result, provided=provided, max_offer=max_offer,
                  show_sensitivity=not args.no_sensitivity, show_solve=args.solve))
 
 

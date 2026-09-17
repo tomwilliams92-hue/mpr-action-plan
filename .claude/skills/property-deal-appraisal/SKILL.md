@@ -67,10 +67,22 @@ built on an optimistic end value is not a cautious appraisal with a margin of
 error; it is a confident answer to the wrong question.
 
 **Everything else** — purchase costs, finance terms, operating assumptions —
-has sensible defaults in `references/cost-benchmarks.md`. Use those defaults,
-but tell the user which ones you used and what they are, because auction fees
-in particular are large, buyer-paid, and routinely missed until contracts are
-exchanged.
+has defaults built into the script, set to the mid-points of the ranges in
+`references/cost-benchmarks.md` rather than to zero, so an omitted cost makes
+the appraisal realistic rather than optimistic.
+
+**Write into the deal file only what the user actually told you.** Let
+everything else fall through to the defaults. This matters more than it looks:
+the report marks each figure *yours* or *assumed* by checking what is present in
+the file, so filling in a plausible-looking solicitor fee yourself and writing it
+into the JSON makes the register claim the user supplied it. They then cannot
+tell which numbers to challenge, which defeats the point of showing them. If you
+are inventing it, leave it out and let the default carry it.
+
+The two exceptions are the auction fees, which default to zero because they
+depend entirely on which kind of auction it is. Establish that and set them
+explicitly — a modern-method reservation fee is large, buyer-paid, and routinely
+missed until contracts are exchanged.
 
 Watch for these, which change the numbers materially:
 
@@ -161,8 +173,17 @@ as the next phone call, not as a forecast. Close with the single number that
 would change your answer, because that tells the user where to spend their
 effort.
 
-Keep the tables; drop the parts of the script output that do not carry the
-argument. Reproducing all of it is not a report, it is a dump.
+**Always include the assumptions register.** The script prints every input it
+used, marked *yours* or *assumed*, at the end of the report. Carry it through to
+the user every time rather than summarising it — the whole answer rests on those
+figures, and a number they cannot see is a number they cannot correct. Where a
+default is doing real work in the result, say so in the prose as well: "this
+assumes a £1,900 solicitor and a 3% product fee, neither of which you have
+confirmed" is worth a line.
+
+Otherwise keep the tables that carry the argument and drop the rest. Reproducing
+all of the output is not a report, it is a dump — but the register is not part of
+that trade-off, because it is what makes the report auditable.
 
 ### 4. Read the listing for what it does not say
 
