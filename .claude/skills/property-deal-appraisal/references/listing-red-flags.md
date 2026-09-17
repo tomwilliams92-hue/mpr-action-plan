@@ -48,11 +48,22 @@ roughly double the Land Transaction Tax. Always convert it to a percentage of
 the actual price and put that figure in front of the user; a number expressed as
 "4.5%" reads as small and behaves as enormous.
 
-Also note the guide price. At modern auction the **reserve sits above the
-guide**, commonly by around 10%, and the guide exists to attract bidders. An
-appraisal run at the guide flatters every number in it. If the user's target is
-below the guide, they are hoping for an unsold lot and a post-auction
-negotiation, not bidding.
+Also note the guide price, and be precise about what it means. The reserve is
+**confidential** — the agent and seller know it and nobody else does, so never
+state it as though it were known. What is known is the constraint: under ASA and
+Property Ombudsman guidance, where a single guide figure is published the reserve
+must be within 10% of it. A £70,000 guide therefore means a reserve somewhere
+between £70,000 and £77,000, and it may well be at the bottom of that band.
+
+The guide can sit below the reserve because it is a marketing figure meant to
+attract bidders, not the seller's floor — which is exactly the bait-pricing
+problem the 10% cap was introduced to limit. Buyers reasonably assume the guide
+is a floor, so explain it rather than asserting a reserve figure.
+
+The practical consequence: an appraisal run at the guide flatters every number in
+it. If the user's maximum is below the guide, they are hoping for an unsold lot
+and a post-auction approach rather than bidding, and they should know that going
+in.
 
 ## Layout tells
 
