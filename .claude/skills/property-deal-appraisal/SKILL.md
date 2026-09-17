@@ -91,49 +91,97 @@ The script produces the money-in table, the refinance position, the post-let
 cashflow, the verdict against the user's criteria, the maximum offer with a
 per-criterion breakdown, a leverage trade-off table and a sensitivity grid.
 
-### 3. Give a verdict, not a spreadsheet
+### 3. Write it up the way a buyer reads it
 
-Report the script's findings, but lead with the answer. The user wants to know
-whether to bid and what their ceiling is, so open with that in one or two
-sentences and let the tables support it.
+The script gives you the numbers. The write-up is where the judgement goes, and
+it should follow this shape, because it is the order the decision actually gets
+made in.
 
-Then make sure these land, because they are where the judgement lives:
+**Open with the verdict in one sentence, classified.** Not "here is the
+analysis" — the answer. The script's `## Verdict` section names the kind of deal
+it is, and that classification is the single most useful thing you can lead
+with, because "yes, but as an equity deal rather than an income one" is a
+genuinely different answer from "yes".
 
-- **The binding constraint.** Which single test stops them paying more, and what
-  would have to change to move it.
-- **The leverage trade-off.** Maximum LTV is not automatically right. At current
-  rates the return on capital is often nearly flat across the LTV range, which
-  means borrowing more buys no extra return and simply converts monthly headroom
-  into recycled capital. If that is what the table shows, say so plainly.
-- **What breaks it.** A down-valuation at refinance is the most common way these
-  deals fail. If a 10% shortfall strands more capital than the user can afford,
-  the deal has no margin for error whatever the base case says.
+**Then the headline table.** Project cost against end value, margin, money left
+in, cashflow. Four or five rows. If you are revisiting a deal after the user
+changed an input, put the before and after side by side and say which change did
+the work — people learn far more from "dropping the refurb moved it more than
+the price did" than from a fresh set of numbers.
 
-### 4. Be honest about the downside
+**Then the constraint, explained.** Which test binds and why. If income tests
+fail at any price, say plainly that negotiating harder will not fix the monthly
+figure, and say why: the debt after refinancing is set by the end value and the
+rent, not by what was paid. Include the inversion when it applies — a higher
+valuation borrows more and cashflows worse, so a strong survey is not
+automatically good news.
 
-If the deal does not work, say it does not work and say why in one line. Do not
-soften it by presenting a max offer so far below the guide price that it is
-really a polite refusal — if the ceiling is 40% under the guide, the useful
-message is "this is not a deal, it is a different property at a different price".
+**Then robustness.** The grid answers a question the base case cannot: is this a
+deal, or a bet? "Every cell makes money" and "only the optimistic corner works"
+deserve very different responses from the buyer.
 
-Equally, do not manufacture doubt about a deal that stacks up well. If the
-numbers clear every test with room to spare, say so.
+**Then what to go and check.** The break-even figures are the most actionable
+output in the whole report — a rent, an end value, a refurb ceiling. Frame them
+as the next phone call, not as a forecast. Close with the single number that
+would change your answer, because that tells the user where to spend their
+effort.
+
+Keep the tables; drop the parts of the script output that do not carry the
+argument. Reproducing all of it is not a report, it is a dump.
+
+### 4. Read the listing for what it does not say
+
+The numbers are only half of it. Listings carry recurring tells, and the ones
+that matter are usually costs or risks the appraisal cannot see. Work through
+`references/listing-red-flags.md` for any real property — the EPC and heating
+combination in particular has killed more lettings plans than any refurb
+overrun, and "EPC: Awaiting" on an electrically-heated solid-wall property is a
+reason to pause rather than a formality.
+
+Flag what you find as specific things to close before bidding, with the reason
+attached. Three or four real ones beat a generic caveat list.
+
+### 5. Be honest in both directions
+
+If the deal does not work, say so in one line and say why. Do not soften it with
+a maximum offer so far below the guide that it is really a polite refusal — if
+the ceiling is 40% under, the useful message is that this is a different
+property at a different price.
+
+Equally, do not manufacture doubt about a deal that stacks up. If the grid is
+green everywhere and the tests clear, say so plainly.
+
+And check the price is gettable before building on it. A guide price at modern
+auction sits *below* the reserve, usually by around 10%, so appraising at the
+guide flatters every number. If the user's target price is below the guide,
+tell them they are fishing for an unsold lot rather than bidding for it.
 
 ## Criteria
 
 If the user has not told you their thresholds, use these and state that you have:
 
-| Test | Default |
-| --- | --- |
-| Money left in after refinance | £0 — full capital recycle |
-| Monthly cashflow | £200 per property |
-| Return on capital left in | 15% |
-| Yield on end value | 7% |
+| Test | Category | Default |
+| --- | --- | --- |
+| Money left in after refinance | capital | £0 — full recycle |
+| Return on capital left in | capital | 15% |
+| Monthly cashflow | income | £200 per property |
+| Yield on end value | income | 7% |
 
-£0 left in is the textbook BRRR target and a demanding one in the current rate
-environment. Many workable deals leave £10,000–£25,000 in. If the user's stated
-criteria make every deal in their area impossible, that is worth telling them —
-it usually means the criteria need revisiting, not that the market has no deals.
+The capital/income split is deliberate and worth explaining to the user at least
+once. Capital tests ask whether you get your money back to buy the next one;
+income tests ask whether the thing pays you while you hold it. In a low-yielding
+area a property routinely passes one and fails the other, and a flat list of
+four failures hides which.
+
+The script also reports NEARLY rather than FAIL where a test misses by a small
+margin, because these thresholds are round numbers rather than cliffs. Leaving
+£6,000 in against a £0 target is a good result described badly, and reporting it
+as a failure would mislead. Treat a near miss as a pass with a note.
+
+£0 left in is the textbook BRRR target and demanding in the current rate
+environment; many workable deals leave £10,000–£25,000 in. If the user's
+criteria make every deal in their area impossible, say so — that usually means
+the criteria need revisiting, not that the market has none.
 
 ## Scope and limits
 
@@ -157,3 +205,4 @@ once, at the end, without hedging every number that precedes it.
   the six-dwellings rule, derelict property, and the England/Scotland bases
 - `references/cost-benchmarks.md` — default fee assumptions with typical ranges
 - `references/valuation-evidence.md` — establishing end value, rent and refurb cost
+- `references/listing-red-flags.md` — what to extract from a listing and what it costs

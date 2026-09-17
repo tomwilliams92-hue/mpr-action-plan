@@ -305,31 +305,132 @@ def appraise(deal, price=None):
     }
 
 
+# How far past a threshold still counts as "nearly". Without these, a deal
+# that leaves £6,000 in against a £0 target reads identically to one that
+# strands £60,000, and the buyer is told something false.
+TOLERANCE = {
+    "Money left in": 7_500,                 # pounds over the limit
+    "Return on capital left in": 3.0,       # percentage points under
+    "Monthly cashflow": 50,                 # pounds a month under
+    "Yield on end value": 0.75,             # percentage points under
+}
+
+
 def test_criteria(result, criteria):
-    """Every test the deal has to pass, with the numbers that decided it."""
+    """Every test the deal has to pass, tagged capital or income.
+
+    The split matters more than the individual results. Capital tests ask
+    whether you get your money back out; income tests ask whether the thing
+    pays you once it is let. A property can be excellent at one and hopeless at
+    the other, and in a low-yielding area that is the normal case rather than
+    the exception. A flat list of four failures hides which kind of deal this is.
+
+    Each test returns PASS, NEARLY or FAIL. The middle state exists because
+    thresholds are chosen round numbers, not cliffs — missing a £0-left-in
+    target by £6,000 is a good outcome described badly.
+    """
+    def status(ok, shortfall, tolerance):
+        if ok:
+            return "PASS"
+        return "NEARLY" if shortfall <= tolerance else "FAIL"
+
+    left = result["money_left_in"]
+    limit = criteria["max_money_left_in"]
+    roi = result["roi"]
+    roi_min = criteria["min_roi_pct"]
+    cf = result["monthly_cashflow"]
+    cf_min = criteria["min_monthly_cashflow"]
+    yld = result["yield_on_value"]
+    yld_min = criteria["min_yield_on_value_pct"]
+
     return [
-        (
-            "Money left in",
-            result["money_left_in"] <= criteria["max_money_left_in"],
-            f"£{result['money_left_in']:,.0f} vs limit £{criteria['max_money_left_in']:,.0f}",
-        ),
-        (
-            "Monthly cashflow",
-            result["monthly_cashflow"] >= criteria["min_monthly_cashflow"],
-            f"£{result['monthly_cashflow']:,.0f} vs minimum £{criteria['min_monthly_cashflow']:,.0f}",
-        ),
-        (
-            "Return on capital left in",
-            result["roi"] >= criteria["min_roi_pct"],
-            ("all capital recycled" if math.isinf(result["roi"])
-             else f"{result['roi']:.1f}% vs minimum {criteria['min_roi_pct']:.1f}%"),
-        ),
-        (
-            "Yield on end value",
-            result["yield_on_value"] >= criteria["min_yield_on_value_pct"],
-            f"{result['yield_on_value']:.1f}% vs minimum {criteria['min_yield_on_value_pct']:.1f}%",
-        ),
+        ("Money left in", "capital",
+         status(left <= limit, left - limit, TOLERANCE["Money left in"]),
+         f"£{left:,.0f} vs limit £{limit:,.0f}"),
+        ("Return on capital left in", "capital",
+         status(roi >= roi_min, roi_min - roi, TOLERANCE["Return on capital left in"]),
+         ("all capital recycled" if math.isinf(roi)
+          else f"{roi:.1f}% vs minimum {roi_min:.1f}%")),
+        ("Monthly cashflow", "income",
+         status(cf >= cf_min, cf_min - cf, TOLERANCE["Monthly cashflow"]),
+         f"£{cf:,.0f} vs minimum £{cf_min:,.0f}"),
+        ("Yield on end value", "income",
+         status(yld >= yld_min, yld_min - yld, TOLERANCE["Yield on end value"]),
+         f"{yld:.1f}% vs minimum {yld_min:.1f}%"),
     ]
+
+
+def category_state(tests, category):
+    """PASS if every test clears, NEARLY if none hard-fails, else FAIL."""
+    states = [st for _, cat, st, _ in tests if cat == category]
+    if all(st == "PASS" for st in states):
+        return "PASS"
+    if any(st == "FAIL" for st in states):
+        return "FAIL"
+    return "NEARLY"
+
+
+def classify(result, criteria):
+    """Name the kind of deal this is, which is what the buyer needs first."""
+    tests = test_criteria(result, criteria)
+    cap = category_state(tests, "capital")
+    inc = category_state(tests, "income")
+
+    def phrase(state, good, near, bad):
+        return {"PASS": good, "NEARLY": near, "FAIL": bad}[state]
+
+    cap_text = phrase(cap,
+        "returns your capital",
+        "very nearly returns your capital",
+        "strands your capital")
+    inc_text = phrase(inc,
+        "pays you monthly",
+        "almost pays you monthly",
+        "does not pay you monthly")
+
+    if cap == "FAIL" and inc == "FAIL":
+        return "neither", (
+            "**This does not work on either measure** — it neither returns your "
+            "capital nor pays you monthly.")
+    if cap in ("PASS", "NEARLY") and inc == "FAIL":
+        lead = "**This is an equity deal, not an income deal.**"
+        if cap == "NEARLY":
+            lead = ("**This is an equity deal, not an income deal — and it misses "
+                    "the capital targets only narrowly.**")
+        return "equity", (
+            f"{lead} It {cap_text} to redeploy and builds equity, but it "
+            "will not pay you meaningfully each month. That is a legitimate thing "
+            "to buy, as long as you are buying it knowingly and not expecting "
+            "income that is never going to arrive.")
+    if inc in ("PASS", "NEARLY") and cap == "FAIL":
+        roi_state = next(st for name, _, st, _ in tests
+                         if name == "Return on capital left in")
+        if roi_state == "FAIL":
+            # It pays monthly, but only because a great deal of money is sitting
+            # under it. Return on that capital is the test that matters here, and
+            # calling this an income deal would flatter it badly.
+            return "neither", (
+                "**This pays monthly, but it is not a good deal.** It "
+                f"{inc_text}, yet it {cap_text} at a return of "
+                f"{result['roi']:.1f}% on the money you leave behind. Judge it "
+                "against what that capital would earn elsewhere, including in "
+                "the next purchase you cannot now make, rather than against the "
+                "monthly figure in isolation.")
+        return "income", (
+            "**This is an income deal, not a capital-recycling one.** It "
+            f"{inc_text} at a healthy {result['roi']:.1f}% on the capital left "
+            "in, but that capital is not coming back for the next purchase. "
+            "Fine if you have money to park; a problem if you are building a "
+            "portfolio from a fixed pot.")
+    if cap == "PASS" and inc == "PASS":
+        return "both", (
+            "**This works on both counts** — it returns your capital and it pays "
+            "you monthly. That is rare, so check the end value and the rent "
+            "harder than usual before believing it.")
+    return "both", (
+        f"**This broadly works on both counts** — it {cap_text} and it "
+        f"{inc_text}, missing the stated targets only narrowly. Judge it on how "
+        "much you trust the end value and the rent, not on the near misses.")
 
 
 def solve_max_offer(deal, criteria_subset=None):
@@ -345,8 +446,9 @@ def solve_max_offer(deal, criteria_subset=None):
         result = appraise(deal, price)
         tests = test_criteria(result, crit)
         if criteria_subset:
-            tests = [t for t in tests if t[0] in criteria_subset]
-        return all(ok for _, ok, _ in tests)
+            tests = [t for t in tests
+                     if t[0] in criteria_subset or t[1] in criteria_subset]
+        return all(st != "FAIL" for _, _, st, _ in tests)
 
     lo, hi = 0.0, max(deal["post_refurb_value"], deal["purchase_price"]) * 1.5
     if not passes(lo):
@@ -403,6 +505,101 @@ def ltv_tradeoff(deal, price=None, ltvs=(60, 65, 70, 75, 80)):
         variant["refinance"]["ltv_pct"] = ltv
         result = appraise(variant, price)
         rows.append((ltv, result))
+    return rows
+
+
+def breakevens(deal):
+    """The numbers that would have to change to rescue a failing test.
+
+    "It does not work" is much less useful than "it works if the rent is £790".
+    Each of these bisects one input while holding the rest still, so the answer
+    is a single figure the buyer can go and verify with an agent or a builder.
+    """
+    crit = deal["criteria"]
+    out = {}
+
+    def bisect(lo, hi, better_is_higher, test):
+        """Find where `test` flips between lo and hi, or None if it never does."""
+        if better_is_higher:
+            if not test(hi):
+                return None          # even the top of the range fails
+            for _ in range(50):
+                mid = (lo + hi) / 2
+                if test(mid):
+                    hi = mid
+                else:
+                    lo = mid
+            return hi
+        if not test(lo):
+            return None              # even the bottom of the range fails
+        for _ in range(50):
+            mid = (lo + hi) / 2
+            if test(mid):
+                lo = mid
+            else:
+                hi = mid
+        return lo
+
+    def rent_test(rent):
+        d = deepcopy(deal); d["monthly_rent"] = rent
+        return appraise(d)["monthly_cashflow"] >= crit["min_monthly_cashflow"]
+
+    if not rent_test(deal["monthly_rent"]):
+        out["Rent needed to hit the cashflow target"] = bisect(
+            deal["monthly_rent"], deal["monthly_rent"] * 3, True, rent_test)
+
+    def value_test(value):
+        d = deepcopy(deal); d["post_refurb_value"] = value
+        return appraise(d)["money_left_in"] <= crit["max_money_left_in"]
+
+    if not value_test(deal["post_refurb_value"]):
+        out["End value needed to hit the money-left-in target"] = bisect(
+            deal["post_refurb_value"], deal["post_refurb_value"] * 2.5, True, value_test)
+
+    def refurb_test(budget):
+        d = deepcopy(deal); d["refurb"]["budget"] = budget
+        return appraise(d)["money_left_in"] <= crit["max_money_left_in"]
+
+    if not refurb_test(deal["refurb"]["budget"]) and refurb_test(0):
+        out["Refurb budget you could afford and still hit money left in"] = bisect(
+            0, deal["refurb"]["budget"], False, refurb_test)
+
+    return out
+
+
+def matrix(deal, values=None, refurbs=None):
+    """Money left in and on-paper margin across the plausible range.
+
+    A single base case invites false confidence. What a buyer actually needs to
+    know is whether the deal survives being wrong about the two inputs they are
+    guessing at — so vary both and show the whole grid. If every cell works, the
+    deal is robust; if only the optimistic corner works, it is a bet.
+    """
+    base_value = deal["post_refurb_value"]
+    base_refurb = deal["refurb"]["budget"]
+    values = values or [round(base_value * m / 1000) * 1000
+                        for m in (0.88, 0.96, 1.0, 1.08)]
+    refurbs = refurbs or [round(base_refurb * m / 1000) * 1000
+                          for m in (1.0, 1.25, 1.55)]
+    rows = []
+    for value in values:
+        cells = []
+        for refurb in refurbs:
+            d = deepcopy(deal)
+            d["post_refurb_value"] = value
+            d["refurb"]["budget"] = refurb
+            cells.append(appraise(d))
+        rows.append((value, cells))
+    return values, refurbs, rows
+
+
+def rent_sensitivity(deal, steps=(-0.1, -0.05, 0.0, 0.05, 0.1, 0.15)):
+    """Cashflow against rent. Usually the input with the most leverage left."""
+    rows = []
+    for step in steps:
+        d = deepcopy(deal)
+        d["monthly_rent"] = round(deal["monthly_rent"] * (1 + step) / 5) * 5
+        rows.append((d["monthly_rent"], appraise(d)))
     return rows
 
 
@@ -487,73 +684,79 @@ def report(deal, result, max_offer=None, show_sensitivity=True):
         f"{money(deal['post_refurb_value'])} — {money(result['profit_on_paper'])} of margin.")
     add("")
 
-    add("## Against your criteria")
+    add("## Verdict")
     add("")
-    add("| Test | Result | Verdict |")
-    add("| --- | --- | --- |")
+    kind, verdict_text = classify(result, crit)
+    add(verdict_text)
+    add("")
+    add("| Test | | Result | |")
+    add("| --- | --- | --- | --- |")
     tests = test_criteria(result, crit)
-    for name, ok, detail in tests:
-        add(f"| {name} | {detail} | {'PASS' if ok else 'FAIL'} |")
+    for name, category, state, detail in tests:
+        add(f"| {name} | {category} | {detail} | {state} |")
     add("")
 
-    passed = sum(1 for _, ok, _ in tests if ok)
-    if passed == len(tests):
-        add(f"**Verdict: the deal works at {money(result['purchase_price'])}.**")
-    elif passed == 0:
-        add(f"**Verdict: the deal does not work at {money(result['purchase_price'])}** — it "
-            "fails every test.")
-    else:
-        failed = ", ".join(name.lower() for name, ok, _ in tests if not ok)
-        add(f"**Verdict: the deal does not work at {money(result['purchase_price'])}** — it "
-            f"fails on {failed}.")
-    add("")
+    gaps = breakevens(deal)
+    if gaps:
+        add("What would have to change to close the gaps:")
+        add("")
+        for label, figure in gaps.items():
+            if figure is None:
+                add(f"- {label}: no achievable figure — this test cannot be met by "
+                    "moving that input alone.")
+            elif "Rent" in label:
+                add(f"- {label}: **£{figure:,.0f} a month** "
+                    f"(you have assumed £{deal['monthly_rent']:,.0f}).")
+            elif "End value" in label:
+                add(f"- {label}: **£{figure:,.0f}** "
+                    f"(you have assumed £{deal['post_refurb_value']:,.0f}).")
+            else:
+                add(f"- {label}: **£{figure:,.0f}** "
+                    f"(you have budgeted £{deal['refurb']['budget']:,.0f}).")
+        add("")
+        add("These are single figures you can go and check with an agent, a builder "
+            "or a broker. Each one holds everything else still, so treat them as "
+            "the question to answer next rather than as a forecast.")
+        add("")
 
     if max_offer is not None:
         add("## Maximum offer")
         add("")
+        cap = solve_max_offer(deal, criteria_subset={"capital"})
+        inc = solve_max_offer(deal, criteria_subset={"income"})
+        both = None if max_offer is False else max_offer
 
-        ceilings = []
-        for label in ("Money left in", "Monthly cashflow", "Return on capital left in",
-                      "Yield on end value"):
-            ceilings.append((label, solve_max_offer(deal, criteria_subset={label})))
+        add("| Judged on | Highest price that still passes |")
+        add("| --- | ---: |")
+        for label, ceiling in (("Capital tests (money back out)", cap),
+                               ("Income tests (what it pays monthly)", inc),
+                               ("Everything together", both)):
+            if ceiling is None:
+                text = "no price works"
+            elif ceiling >= deal["post_refurb_value"] * 1.49:
+                text = "not price-sensitive"
+            else:
+                text = money(ceiling)
+            add(f"| {label} | {text} |")
+        add("")
 
-        if max_offer is False:
-            blocked = [label for label, ceiling in ceilings if ceiling is None]
-            add("**There is no purchase price at which this deal meets your criteria — not "
-                "even at zero.**")
+        if inc is None and cap is not None:
+            add(f"**Offer no more than {money(cap)}** if you are buying this to "
+                "recycle capital. No price makes the income tests pass, so do not "
+                "negotiate in the belief that a lower purchase fixes the monthly "
+                "figure — it does not. After refinancing your debt is set by the "
+                "end value and the rent, not by what you paid.")
             add("")
-            add(f"These tests fail at any price: {', '.join(blocked).lower()}.")
-            add("")
-            add("That is not a quirk of the model. Once you refinance, your debt is set by "
-                "the end value and the rent, not by what you paid — so the mortgage payment, "
-                "the cashflow and the yield are all fixed before you make an offer. Paying "
-                "less improves how much capital you get back; it does not improve the monthly "
-                "position at all. A deal that fails on cashflow or yield can only be fixed by "
-                "a higher rent, a cheaper refinance, or a different property.")
+            add("There is a trap in that worth spelling out: because the loan is a "
+                "percentage of the end value, a *higher* valuation borrows more and "
+                "cashflows *worse*. A stronger survey result is not automatically "
+                "good news for the monthly position.")
+        elif both is None:
+            add("No price passes everything, and the capital tests fail too. The "
+                "problem is the end value, the rent, the refurb cost or the finance "
+                "terms — not the asking price.")
         else:
-            add(f"**Offer no more than {money(max_offer)}** to meet every criterion.")
-            add("")
-            add("| Criterion | Price ceiling |")
-            add("| --- | ---: |")
-            for label, ceiling in ceilings:
-                if ceiling is None:
-                    text = "fails at any price"
-                elif ceiling >= deal["post_refurb_value"] * 1.49:
-                    text = "not price-sensitive"
-                else:
-                    text = money(ceiling)
-                add(f"| {label} | {text} |")
-            add("")
-            binding = min(
-                ((label, c) for label, c in ceilings if c is not None),
-                key=lambda item: item[1],
-            )[0]
-            add(f"The binding constraint is **{binding.lower()}** — that is the test which "
-                "stops you bidding higher, and the one to attack if you want the ceiling to "
-                "move. Money left in is capital-efficiency limited, so a stronger end value "
-                "or a cheaper refurb raises it. Cashflow and yield barely move with price at "
-                "all, because the debt you carry after refinancing is set by the end value "
-                "and the rent, not by what you paid.")
+            add(f"**Offer no more than {money(both)}** to satisfy every test.")
         add("")
 
     add("## The leverage trade-off")
@@ -577,6 +780,50 @@ def report(deal, result, max_offer=None, show_sensitivity=True):
     add("")
 
     if show_sensitivity:
+        add("## Is it robust, or is it a bet?")
+        add("")
+        add("Money left in, and on-paper margin, across the range you might be wrong "
+            "over. Your base case is one cell of this grid.")
+        add("")
+        values, refurbs, rows = matrix(deal)
+        add("| End value | " + " | ".join(f"refurb {money(r)}" for r in refurbs) + " |")
+        add("| ---: | " + " | ".join("---:" for _ in refurbs) + " |")
+        for value, cells in rows:
+            cs = [f"{money(c['money_left_in'])} in / {c['profit_on_paper']:+,.0f}"
+                  for c in cells]
+            add(f"| {money(value)} | " + " | ".join(cs) + " |")
+        add("")
+        negative = sum(1 for _, cells in rows for c in cells if c["profit_on_paper"] < 0)
+        total = sum(len(cells) for _, cells in rows)
+        if negative == 0:
+            add("Every cell makes money. The deal survives being wrong about both the "
+                "end value and the refurb, which is the strongest thing that can be "
+                "said about a BRRR before you own it.")
+        elif negative == total:
+            add("No cell makes money. This is not a question of being cautious with "
+                "your assumptions — the deal does not work anywhere in the plausible "
+                "range.")
+        else:
+            add(f"{negative} of {total} cells lose money. The deal works, but only if "
+                "you are right about the inputs — treat the optimistic corner as a "
+                "bet rather than a plan, and size your contingency accordingly.")
+        add("")
+
+        add("## What the rent does")
+        add("")
+        add("| Rent | Gross yield | Monthly cashflow |")
+        add("| ---: | ---: | ---: |")
+        for rent, row in rent_sensitivity(deal):
+            marker = " *" if abs(rent - deal["monthly_rent"]) < 1 else ""
+            add(f"| {money(rent)}{marker} | {row['yield_on_value']:.1f}% | "
+                f"{money(row['monthly_cashflow'])} |")
+        add("")
+        add("Rent is usually the input with the most leverage still in it and the "
+            "easiest to verify — a letting agent will give you a real figure in a "
+            "phone call. Where the monthly position is marginal, this is the number "
+            "to nail down before anything else.")
+        add("")
+
         add("## What breaks it")
         add("")
         add("| Scenario | Money left in | Monthly cashflow |")
